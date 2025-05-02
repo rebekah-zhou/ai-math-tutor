@@ -17,11 +17,9 @@ def tokenize(latex: str):
     raw = TOKEN_RE.findall(latex)
     # each match is a tuple of groups; pick the non-empty one
     tokens = [ next(tok for tok in group if tok) for group in raw ]
+    tokens = [t for t in tokens if not t.isspace()]
     return tokens
 
-# example
-print(tokenize(r"\frac{a}{b} + \sqrt{2.0}"))
-# → ['\\frac', '{', 'a', '}', '{', 'b', '}', '+', '\\sqrt', '{', '2.0', '}']
 
 from collections import Counter
 
