@@ -6,23 +6,21 @@ import numpy as np
 from PIL import Image, ImageDraw
 import re
 
-# ─── PARAMETERS ──────────────────────────────────────────────────────────────
-DATA_ROOT       = "data"               # top-level folder with train/, valid/, test/
-OUTPUT_ROOT     = "data/images"         # output directory for PNGs
-CANVAS_SIZE     = 128                   # output image size (pixels)
-MARGIN          = 5                     # whitespace border
-LINE_WIDTH      = 2                     # stroke thickness (pixels)
-TRAIN_SAMPLE_N  = 10000                 # number of train files to convert
-# Only process these splits
-SPLITS          = ["train", "valid", "test"]
-# ────────────────────────────────────────────────────────────────────────────────
+# ─── PARAMETERS ────────────────────────────────────────
+DATA_ROOT = "data"          # Root folder with train/, valid/, test/
+OUTPUT_ROOT = "data/images"
+CANVAS_SIZE = 256
+MARGIN = 20
+LINE_WIDTH = 3
+TRAIN_SAMPLE_N = 10000
+SPLITS = ["train", "valid", "test"]
 
 # match ints, decimals, or floats in e-notation, no capturing groups
 FLOAT_RE = re.compile(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?")
 
 
 def parse_inkml(path):
-    """Parse an InkML trace into a list of (x,y) points, dropping any extra dims."""
+    """Parse InkML trace into a list of (x,y) points."""
     tree = ET.parse(path)
     root = tree.getroot()
     strokes = []
@@ -44,25 +42,62 @@ def parse_inkml(path):
 
 
 def normalize_strokes(strokes, canvas_size=CANVAS_SIZE, margin=MARGIN):
-    """Normalize stroke coordinates to fit in canvas."""
+    """Normalize strokes to fit canvas while preserving aspect ratio."""
     all_pts = np.vstack(strokes)
     min_xy = all_pts.min(axis=0)
     max_xy = all_pts.max(axis=0)
-    scale = (canvas_size - 2*margin) / max((max_xy - min_xy).max(), 1e-6)
+    
+    # Calculate aspect ratio preserving scale
+    width = max_xy[0] - min_xy[0]
+    height = max_xy[1] - min_xy[1]
+    scale = min(
+        (canvas_size - 2*margin) / max(width, 1e-6),
+        (canvas_size - 2*margin) / max(height, 1e-6)
+    )
+    
+    # Center the equation
+    scaled_w = width * scale
+    scaled_h = height * scale
+    x_offset = (canvas_size - scaled_w) / 2
+    y_offset = (canvas_size - scaled_h) / 2
+    
     normalized = []
     for stroke in strokes:
-        pts = (np.array(stroke) - min_xy) * scale + margin
+        pts = (np.array(stroke) - min_xy) * scale
+        pts[:, 0] += x_offset
+        pts[:, 1] += y_offset
         normalized.append([tuple(p) for p in pts])
     return normalized
 
 
 def strokes_to_image(strokes, canvas_size=CANVAS_SIZE, line_width=LINE_WIDTH):
-    """Rasterize strokes onto a white background."""
-    img = Image.new('L', (canvas_size, canvas_size), color=255)
+    """Rasterize strokes with anti-aliasing and proper line joins."""
+    scale = 2
+    big_size = canvas_size * scale
+    img = Image.new('L', (big_size, big_size), color=255)
     draw = ImageDraw.Draw(img)
+    
     for stroke in strokes:
         if len(stroke) > 1:
-            draw.line(stroke, fill=0, width=line_width)
+            big_stroke = [(x * scale, y * scale) for x, y in stroke]
+            draw.line(
+                big_stroke, 
+                fill=0, 
+                width=line_width * scale,
+                joint="curve"
+            )
+            
+            for x, y in big_stroke:
+                r = (line_width * scale) / 2
+                draw.ellipse(
+                    [(x-r, y-r), (x+r, y+r)],
+                    fill=0
+                )
+    
+    img = img.resize(
+        (canvas_size, canvas_size),
+        Image.Resampling.LANCZOS
+    )
     return img
 
 
@@ -91,7 +126,8 @@ if __name__ == "__main__":
     # Prepare train sample
     train_files = glob.glob(os.path.join(DATA_ROOT, 'train', '*.inkml'))
     random.seed(42)
-    train_sample = random.sample(train_files, k=min(TRAIN_SAMPLE_N, len(train_files)))
+    n_samples = min(TRAIN_SAMPLE_N, len(train_files))
+    train_sample = random.sample(train_files, k=n_samples)
 
     # Convert each split
     for split in SPLITS:

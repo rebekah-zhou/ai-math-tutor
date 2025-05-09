@@ -8,11 +8,15 @@ dependencies:
   - python=3.11
   - pytorch
   - torchvision
-  - cpuonly      # or cudatoolkit=11.7 if you have an NVIDIA GPU
+  - torchaudio
   - numpy
   - pillow
   - pandas
   - sentencepiece
+  - matplotlib
+  - tqdm
+  - h5py
   - pip
   - pip:
     - torchtext
+    - libjpeg-turbo
