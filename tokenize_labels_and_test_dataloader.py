@@ -79,8 +79,7 @@ class MathWritingDataset(Dataset):
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-        img_path = os.path.join("data", row.image_path)
-        img = Image.open(img_path).convert('L')
+        img = Image.open(row.image_path).convert('L')
         return self.transform(img), row.label
 
 # 2) Instantiate dataset + DataLoader
@@ -104,3 +103,5 @@ for i in range(4):
     # strip <sos> and <eos>
     seq_ids = seq_ids[1:-1]
     print("Decoded tokens:", [inv_vocab[id] for id in seq_ids])
+
+print(f"Built vocab with {len(vocab)} tokens")
